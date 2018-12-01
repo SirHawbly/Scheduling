@@ -12,7 +12,8 @@ from copy import deepcopy
 # -----
 # # set up globals for specific days,
 # # as well as a list of all the days 
-daynames = [MON,TUE,WED,THU,FRI,SAT,SUN]=['mon','tue','wed','thu','fri','sat','sun']
+day_ids = [MON,TUE,WED,THU,FRI,SAT,SUN]=['mon','tue','wed','thu','fri','sat','sun']
+# days_short = {MON:'mon',TUE:'tue',WED:'wed',THU:'thu',FRI:'fri',SAT:'sat',SUN:'sun']
 days = {MON:'Monday',TUE:'Tuesday',WED:'Wednesday',THU:'Thursday',
         FRI:'Friday',SAT:'Saturday',SUN:'Sunday'}
 
@@ -107,9 +108,11 @@ def parse_hour_range(entry, item):
 
 		# # change the times from 9 o'clock to
 		# # 0900 o'clock. Uses the full name
-                # # days not the short ones.
+		# # days not the short ones.
 		for i in range(start, end):
 			entry[days[item[0]]] += [i*100]
+
+		# print(entry[days[item[0]]]) 
 
 	return 
 
@@ -217,36 +220,31 @@ def write_output_as_time(output, json_file):
 
 
 # -----
-def read_csv_file(schedule_file, output_file, output_json):
+def lint_input_file(schedule_file):
 	"""
-		Reads in a csv file, using this format:
+	Lints a csv file. Verifies that every line is 
+	of the form: name, day : s-e : s-e, day : s-e, etc.
 
-			name,day:time-time,day:time-time,day:time-time ...
-			*not all days need to be included* 
-
-			ie. name00,mon:13-15,tue:8-10, ...
-
-		It uses this format to populate an array of users
-		and days/times they are available and returns it.
-
+	If this is not the case, the function will print an
+	error message, a line number, the data, and assert 
+	false.
 	"""
-	title = "read_csv_file - "
 
-	# # print that we are starting to read
-	# # the schedule file.
-	print(title + "reading from '{}'.".format(schedule_file))
-
-	# # linting the csv
+	title = "lint_input_file - "
+	
+	# # opening the csv
 	with open(schedule_file) as input_file:
 
 		line = 0
-                # # format = (name,day:s-e,day:s-e:s-e,day:,)
 		csv_parser = csv.reader(input_file)
 		for entry in csv_parser:
 			line += 1
+
+			# # we skip the 1st line, its the header
 			if (line == 1): continue
 
 			# # print(line,entry)
+			# # format = (name,day:s-e,day:s-e:s-e,day:,)
 			for section in entry:
 				for item in entry:
 
@@ -255,10 +253,10 @@ def read_csv_file(schedule_file, output_file, output_json):
 					if ":" in item:
 
 						item = item.split(":")						
-						# print(item[0])
+						# print(entry,item,item[0])
 
 						# # if the first item in the set isnt a day name
-						if (not item[0] in daynames):
+						if (not item[0] in day_ids):
 							print(title,"on line ",line,", incorrect day name -", item)
 							assert(False)
 
@@ -281,12 +279,38 @@ def read_csv_file(schedule_file, output_file, output_json):
 
 							# # if either of the times are out of the range
 							if (int(times[0]) < 8 or 18 < int(times[1])):	
-								print(title, "on line",line,"in",times, "either (", times[0], "< 8 ), or (", times[1], "> 18 )" )
+								print(title,"on line",line,"in",item)
+								print("\t","in",times,"either", times[0],"< 8, or ", times[1],"> 18")
 								assert(False)
+			
+							# # if the time ranges are reversed
 							if (int(times[1]) < int(times[0])):	
 								print(title, "on line", line, "in", times, "," ,times[0],">", times[1])
 								assert(False)
 
+
+# -----
+def read_csv_file(schedule_file, output_file, output_json):
+	"""
+		Reads in a csv file, using this format:
+
+			name,day:time-time,day:time-time,day:time-time ...
+			*not all days need to be included* 
+
+			ie. name00,mon:13-15,tue:8-10, ...
+
+		It uses this format to populate an array of users
+		and days/times they are available and returns it.
+
+	"""
+	title = "read_csv_file - "
+
+	# # print that we are starting to read
+	# # the schedule file.
+	print(title + "reading from '{}'.".format(schedule_file))
+
+	# # lint the file
+	lint_input_file(schedule_file)
 
 	# # open the file, and create a csv
 	# # parser for it, split it up, since it
@@ -329,12 +353,29 @@ def read_csv_file(schedule_file, output_file, output_json):
 				else:	
 					parse_hour_range(output_entry, item)
 
+			# # print out all of the entry
+			# for entry in output_entry:
+				# if (output_entry[entry] != []):
+					# print(entry, '-', output_entry[entry], end='. ')
+			# print()
+
+			# # make sure there are no duplicate entries
+			for daytype in days:
+				
+				# print(days[daytype])
+				# print(output_entry[days[daytype]])
+				setlist =  sorted( list (set (output_entry[days[daytype]]) ) )
+				output_entry[days[daytype]].sort()
+				# # if there are, then we need to print out a warning
+				if (setlist != output_entry[days[daytype]]):
+					print(title,"WARNING duplicate times on line",output_entry['line'])
+					print("\trewriting",output_entry[days[daytype]],"\n\tas",setlist)
+					output_entry[days[daytype]] = setlist
+
+				# print(output_entry[days[daytype]])
+
 			# # add the entry to the output list,
 			# # and increment the line counter.
-			for entry in output_entry:
-				if (output_entry[entry] != []):
-					print(entry, '-', output_entry[entry], end='. ')
-			print()
 			output_data += [output_entry]
 			current_line += 1
 
